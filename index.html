@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WoW Forever Survival Hunter Simulator</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #0f1218; color: #e6e9ef;
+    font-family: "Segoe UI", Tahoma, sans-serif; display: flex; justify-content: center;
+    user-select: none;
+  }
+  body { align-items: flex-start; flex-wrap: wrap; }
+  #app { width: 100%; max-width: 760px; padding: 16px; }
+  #buffpanel {
+    width: 230px; margin: 16px 0 0 16px; padding: 10px 12px 12px; position: sticky; top: 16px;
+    background: #171b24; border: 1px solid #2f394c; border-radius: 6px;
+  }
+  #buffpanel { max-height: calc(100vh - 32px); overflow-y: auto; }
+  #buffpanel h2 { font-size: 15px; color: var(--accent); margin: 0 0 8px; }
+  #buffpanel section + section { margin-top: 14px; padding-top: 10px; border-top: 1px solid #2a3242; }
+  .buffbtns { display: flex; gap: 6px; margin-bottom: 8px; }
+  .buffbtns button {
+    flex: 1; font: inherit; font-size: 12px; font-weight: 600; padding: 4px; cursor: pointer;
+    background: #232b3a; color: #e6e9ef; border: 1px solid #3d4860; border-radius: 4px;
+  }
+  .buffbtns button:hover { border-color: var(--accent); }
+  .rbuff {
+    display: flex; align-items: center; gap: 8px; padding: 5px 4px; cursor: pointer; border-radius: 4px;
+    font-size: 12px; opacity: .55;
+  }
+  .rbuff:hover { background: #1e2430; }
+  .rbuff.on { opacity: 1; }
+  .rbuff img { width: 26px; height: 26px; border: 1px solid #3d4860; border-radius: 4px; flex: none; }
+  .rbuff.on img { border-color: #f5c451; }
+  .rbuff small { display: block; color: #76819a; font-size: 10px; line-height: 1.25; }
+  .rbuff input { accent-color: #f5c451; flex: none; }
+  @media (max-width: 1040px) { #buffpanel { position: static; width: calc(100% - 32px); max-width: 728px; } }
+  #startwrap {
+    display: none; position: absolute; inset: 40px 0 0; z-index: 3; align-items: center; justify-content: center;
+    background: rgba(15, 18, 24, .6);
+  }
+  #arena.idle #startwrap { display: flex; flex-direction: column; gap: 14px; }
+  #hpsetting { font-size: 13px; color: #e6e9ef; display: flex; align-items: center; gap: 8px; }
+  #hpinput {
+    width: 120px; padding: 5px 8px; font: inherit; font-size: 14px; font-weight: 700; text-align: right;
+    background: #171b24; color: #f5c451; border: 1px solid #3d4860; border-radius: 4px;
+  }
+  #start {
+    font: inherit; font-size: 22px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+    padding: 16px 44px; color: #fff; background: linear-gradient(#3fa535, #1f6a1a); border: 2px solid #7fdc6f; border-radius: 8px;
+  }
+  #start:hover { filter: brightness(1.15); }
+  header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  h1 { font-size: 20px; margin: 0; color: var(--accent); }
+  #meter { font-size: 14px; color: #9aa4b5; font-variant-numeric: tabular-nums; }
+  #meter b { color: #f5c451; }
+
+  #arena {
+    position: relative; height: 300px; margin-top: 12px; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 80%, #232b3a 0%, #131720 70%);
+    border: 1px solid #2f394c; border-radius: 6px;
+  }
+  #target {
+    position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
+    text-align: center; color: #9aa4b5; font-size: 12px;
+  }
+  #target svg { display: block; margin: 0 auto 4px; }
+  #target.hit svg { animation: shake .15s; }
+  @keyframes shake { 25% { transform: translateX(-4px) rotate(-2deg); } 75% { transform: translateX(4px) rotate(2deg); } }
+
+  #hpbar {
+    position: absolute; left: 12px; right: 12px; top: 10px; height: 20px; background: #1a2a12;
+    border: 1px solid #3d5a2a; border-radius: 4px; overflow: hidden;
+  }
+  #hpfill { height: 100%; width: 100%; background: linear-gradient(#4fb53a, #2e7d20); }
+  #hpbar.execute #hpfill { background: linear-gradient(#e0362a, #a3160e); }
+  #hpmark { position: absolute; left: 20%; top: 0; bottom: 0; width: 2px; background: #f5c451; opacity: .7; }
+  #hptext {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; text-shadow: 1px 1px 2px #000; font-variant-numeric: tabular-nums;
+  }
+  .floater {
+    position: absolute; font-weight: 800; font-size: 20px; pointer-events: none; white-space: nowrap;
+    text-shadow: 0 0 3px #000, 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+    animation: floatUp 1.4s ease-out forwards; transform: translateX(-50%);
+  }
+  .floater.white { color: #fff; }
+  .floater.yellow { color: #ffe100; }
+  .floater.crit { font-size: 34px; animation-name: floatCrit; }
+  .floater.avoid { color: #ddd; font-size: 16px; font-weight: 600; }
+  .floater.bleed { font-size: 14px; }
+  .floater.rage { color: #ff5a4a; font-size: 15px; }
+  @keyframes floatUp {
+    from { opacity: 1; margin-top: 0; } 70% { opacity: 1; } to { opacity: 0; margin-top: -130px; }
+  }
+  @keyframes floatCrit {
+    0% { opacity: 1; margin-top: 0; font-size: 50px; } 15% { font-size: 34px; }
+    70% { opacity: 1; } 100% { opacity: 0; margin-top: -130px; }
+  }
+
+  #stances { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: #9aa4b5; }
+  .stance {
+    display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; cursor: pointer; font: inherit; font-size: 12px;
+    background: #171b24; color: #76819a; border: 2px solid #2a3242; border-radius: 6px; opacity: .6;
+  }
+  .stance img { width: 26px; height: 26px; border-radius: 4px; display: block; }
+  .stance.active { opacity: 1; color: #f5c451; font-weight: 700; border-color: #f5c451; box-shadow: 0 0 8px rgba(255, 209, 0, .5); }
+  .ability.proc { border-color: #ffe100; animation: proc .6s infinite alternate; }
+  @keyframes proc { from { box-shadow: 0 0 4px #ffe100; } to { box-shadow: 0 0 14px #ffe100, inset 0 0 10px rgba(255,225,0,.5); } }
+  #buffs { height: 62px; overflow: hidden; margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; align-content: flex-start; }
+  .buff { height: 28px; }
+  .buff {
+    font-size: 12px; padding: 4px 8px; border-radius: 4px; background: #1e2430;
+    border: 1px solid #3d4860; color: #f5c451; font-variant-numeric: tabular-nums;
+  }
+
+  .swing { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; color: #9aa4b5; }
+  .swing span { width: 62px; }
+  .swingbar { flex: 1; height: 6px; background: #1a1f2a; border-radius: 3px; overflow: hidden; }
+  .swingbar div { height: 100%; width: 0; background: #c3cad8; }
+
+  #ragebar {
+    position: relative; height: 28px; margin-top: 10px; background: #2a0d0a;
+    border: 1px solid #5c1f18; border-radius: 4px; overflow: hidden;
+  }
+  #ragefill { height: 100%; width: 0; background: linear-gradient(#e0362a, #a3160e); }
+  #ragetext {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; text-shadow: 1px 1px 2px #000; font-variant-numeric: tabular-nums;
+  }
+
+  #bar { display: grid; grid-template-columns: repeat(11, 1fr); gap: 6px; margin-top: 12px; }
+  .slot { text-align: center; font-size: 10px; color: #9aa4b5; line-height: 1.2; }
+  .ability {
+    position: relative; display: block; width: 100%; aspect-ratio: 1; margin-bottom: 3px;
+    border: 2px solid #3d4860; border-radius: 6px; overflow: hidden;
+    background: #151a23 center / cover no-repeat; color: #e6e9ef; cursor: pointer; padding: 0; font: inherit;
+  }
+  .ability:hover { border-color: var(--accent); }
+  .ability:active { transform: scale(.95); }
+  .ability .key, .ability .cost {
+    position: absolute; font-size: 11px; font-weight: 700;
+    text-shadow: 0 0 2px #000, 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+  }
+  .ability .key { top: 2px; left: 4px; color: #fff; }
+  .ability .cost { bottom: 2px; right: 4px; color: #ff8a7b; }
+
+  #tab-combat { position: relative; }
+  #summary {
+    display: none; position: absolute; inset: 12px 0 0; z-index: 5; padding: 4px 18px 18px; overflow: auto;
+    background: rgba(15, 18, 24, .97); border: 1px solid var(--accent); border-radius: 6px;
+  }
+  #summary.show { display: block; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .wcl-meta { font-size: 12px; color: #9aa4b5; margin: 4px 0 2px; }
+  .wcl-meta b { color: #f5c451; }
+  table.wcl { font-size: 12px; background: #0b0b0b; border: 1px solid #333; margin-top: 8px; }
+  table.wcl th { background: #1a1a1a; color: #e1f2f5; font-size: 11px; padding: 5px 6px; border-bottom: 1px solid #333; white-space: nowrap; }
+  table.wcl td { padding: 3px 6px; border-bottom: 1px solid #1c1c1c; color: #ddd; white-space: nowrap; }
+  table.wcl tr:nth-child(even) td { background: #121212; }
+  table.wcl tr:hover td { background: #1e2a30; }
+  .wcl-name { color: #ffe680 !important; font-weight: 600; }
+  .wcl-name img { width: 18px; height: 18px; vertical-align: middle; margin-right: 6px; border: 1px solid #444; }
+  .wcl-amount { width: 34%; }
+  .wcl-amount > span { display: inline-block; vertical-align: middle; }
+  .wcl-pct { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+  .wcl-bar { width: calc(100% - 110px); height: 12px; margin: 0 6px; }
+  .wcl-bar i { display: block; height: 100%; background: var(--accent); border-radius: 1px; }
+  .wcl-total { width: 50px; text-align: right; font-variant-numeric: tabular-nums; }
+  .wcl-totalrow td { background: #1a1a1a !important; font-weight: 700; color: #fff; border-top: 1px solid #333; }
+  .reset {
+    display: block; width: 100%; margin-top: 14px; padding: 14px; cursor: pointer;
+    font: inherit; font-size: 20px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+    color: #fff; background: linear-gradient(#c0392b, #7d1810); border: 2px solid #e0685c; border-radius: 8px;
+  }
+  .reset:hover { filter: brightness(1.15); }
+  .reset:active { transform: scale(.99); }
+  nav { display: flex; gap: 4px; margin-top: 12px; border-bottom: 1px solid #2f394c; }
+  nav button {
+    font: inherit; font-size: 13px; font-weight: 600; padding: 6px 16px; cursor: pointer;
+    background: #171b24; color: #9aa4b5; border: 1px solid #2f394c; border-bottom: none; border-radius: 6px 6px 0 0;
+  }
+  nav button.active { background: #232b3a; color: #f5c451; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+  th { text-align: left; color: var(--accent); font-size: 12px; padding: 4px 8px; border-bottom: 1px solid #2f394c; }
+  td { padding: 5px 8px; border-bottom: 1px solid #1e2430; vertical-align: middle; }
+  td.dim, .dim { color: #76819a; }
+  .q-epic { color: #a335ee; font-weight: 600; } .q-rare { color: #0070dd; font-weight: 600; }
+  .custom-toggle { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .custom-toggle input { accent-color: #f5c451; width: 16px; height: 16px; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
+  .fields label { font-size: 12px; color: #9aa4b5; display: flex; flex-direction: column; gap: 3px; }
+  .fields input {
+    padding: 6px 8px; font: inherit; font-size: 15px; font-weight: 700; background: #171b24; color: #f5c451;
+    border: 1px solid #3d4860; border-radius: 4px; width: 100%;
+  }
+  .fields.off { opacity: .45; }
+  .plain-btn {
+    font: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; margin-top: 10px; cursor: pointer;
+    background: #232b3a; color: #e6e9ef; border: 1px solid #3d4860; border-radius: 4px;
+  }
+  .plain-btn:hover { border-color: var(--accent); }
+  .tab h2 { font-size: 15px; color: var(--accent); margin: 18px 0 0; }
+  .statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; margin-top: 10px; }
+  .stat { background: #171b24; border: 1px solid #2a3242; border-radius: 4px; padding: 6px 10px; font-size: 12px; color: #9aa4b5; }
+  .stat b { display: block; font-size: 17px; color: #f5c451; }
+  .talent-icon, .buff img { width: 28px; height: 28px; border: 1px solid #3d4860; border-radius: 4px; display: block; }
+  .buff { display: flex; align-items: center; gap: 6px; }
+  .buff img { width: 18px; height: 18px; }
+  .ench { color: #1eff00; font-size: 11px; }
+  .rank { color: #f5c451; font-weight: 700; white-space: nowrap; }
+  .tag { font-size: 10px; padding: 1px 6px; border-radius: 8px; white-space: nowrap; }
+  .trees { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+  .tree { background: #171b24; border: 1px solid #2a3242; border-radius: 6px; padding: 0 14px 14px; margin-top: 12px; }
+  .tree h2 { margin: 10px 0; text-align: center; }
+  .tgrid { display: grid; grid-template-columns: repeat(4, 40px); grid-template-rows: repeat(7, 40px); gap: 14px 10px; }
+  .tnode {
+    position: relative; z-index: 1; width: 40px; height: 40px; border: 2px solid #f5c451; border-radius: 5px;
+    background: #151a23 center / cover no-repeat;
+  }
+  .tnode span {
+    position: absolute; right: -6px; bottom: -6px; font-size: 10px; font-weight: 700; padding: 0 3px;
+    background: #000; border-radius: 3px; color: #f5c451;
+  }
+  .tnode.partial { border-color: #40bf40; } .tnode.partial span { color: #40bf40; }
+  .tnode.empty { border-color: #343c4c; filter: grayscale(1) brightness(.8); } .tnode.empty span { color: #999; }
+  .tnode i {
+    position: absolute; left: -6px; top: -6px; font-size: 9px; font-style: normal; font-weight: 700; padding: 0 3px;
+    background: #1f3a1c; color: #7fdc6f; border-radius: 3px;
+  }
+  .tlink { width: 4px; justify-self: center; background: #343c4c; margin: 20px 0; }
+  .tlink.on { background: #f5c451; }
+  #talent-tip {
+    display: none; position: fixed; z-index: 50; max-width: 300px; padding: 9px 11px; pointer-events: none;
+    background: #0b0e13; border: 1px solid var(--accent); border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, .7);
+    font-size: 12px; line-height: 1.4; color: #e6e9ef;
+  }
+  #talent-tip .tip-head { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; }
+  #talent-tip .tip-head b { font-size: 14px; color: #fff; }
+  #talent-tip .tip-head span { color: #9aa4b5; white-space: nowrap; }
+  #talent-tip .tip-new { color: #7fdc6f; font-size: 11px; }
+  #talent-tip .tip-desc { color: #f5c451; margin-top: 5px; }
+  #talent-tip .tip-status { margin-top: 6px; font-size: 11px; color: #76819a; }
+  #talent-tip .tip-status.sim { color: #7fdc6f; }
+  .tnode { cursor: help; }
+  .tag.sim { background: #1f3a1c; color: #7fdc6f; } .tag.off { background: #1e2430; color: #76819a; }
+  .ability .cdmask { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0,0,0,.72); pointer-events: none; }
+  .ability .cdtext {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 800; color: #fff; text-shadow: 1px 1px 2px #000; pointer-events: none;
+  }
+  #keybar { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #9aa4b5; }
+  #keybar button {
+    font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer;
+    background: #232b3a; color: #e6e9ef; border: 1px solid #3d4860; border-radius: 4px;
+  }
+  #keybar button:hover { border-color: var(--accent); }
+  #keybar button.active { background: #f5c451; color: #0f1218; border-color: #f5c451; }
+  #rebind-hint.warn { color: #ff7a6b; font-weight: 700; }
+  #rebind-reset { display: none; }
+  #keybar.editing #rebind-reset { display: inline-block; }
+  #bar.editing .ability { filter: none; border-style: dashed; border-color: var(--accent); }
+  #bar.editing .ability.rebind-target { border-style: solid; border-color: #40bf40; box-shadow: 0 0 10px #40bf40; }
+  .ability.norage { filter: grayscale(.8) brightness(.6); }
+  .ability.queued { border-color: #ffe100; box-shadow: 0 0 10px #ffe100, inset 0 0 10px rgba(255,225,0,.4); }
+  .ability.denied { animation: denied .2s; }
+  @keyframes denied { 50% { border-color: #ff3020; } }
+
+  #log {
+    margin-top: 12px; height: 132px; overflow: hidden; font-size: 12px; line-height: 1.35;
+    background: #171b24; border: 1px solid #2a3242; border-radius: 4px; padding: 6px 8px;
+    display: flex; flex-direction: column; justify-content: flex-end; color: #9aa4b5;
+  }
+  #log .y { color: #ffe100; } #log .w { color: #fff; } #log .r { color: #ff7a6b; }
+  footer { margin-top: 10px; font-size: 11px; color: #667089; line-height: 1.4; }
+
+  /* Theme: modern slate */
+  :root { --accent: var(--accent); }
+  body {
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: #0f1218 radial-gradient(1100px 520px at 50% -180px, #1b2233, transparent) no-repeat;
+  }
+  h1 { color: var(--accent); font-weight: 700; letter-spacing: .2px; }
+  #meter { color: #9aa4b5; }
+  nav { border-bottom: none; gap: 6px; }
+  nav button { border: 1px solid #2a3242; border-radius: 999px; padding: 6px 18px; background: #171b24; transition: background .12s, color .12s; }
+  nav button:hover { color: #e6e9ef; border-color: #3d4860; }
+  nav button.active { background: var(--accent); color: #0f1218; border-color: var(--accent); }
+  #arena { border-radius: 12px; border-color: #2a3242; background: radial-gradient(ellipse at 50% 85%, #232b3a 0%, #131720 72%); box-shadow: inset 0 0 70px rgba(0, 0, 0, .35); }
+  #log, .tree, #buffpanel, .stat, #summary { border-radius: 10px; }
+  #buffpanel { box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
+  #buffpanel h2, .tab h2 { font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
+  .ability { border-radius: 10px; }
+  .ability:hover { border-color: var(--accent); }
+  #ragebar, #hpbar, #manabar { border-radius: 8px; }
+  .swingbar { border-radius: 999px; }
+  .buff { border-radius: 999px; padding: 4px 10px; }
+  .reset, #start { border-radius: 10px; }
+  .stance { border-radius: 999px; }
+  .stat b { color: #f5c451; }
+  table:not(.wcl) td { border-bottom-color: #1e2430; }
+  table:not(.wcl) th { color: #9aa4b5; text-transform: uppercase; letter-spacing: .5px; font-size: 11px; }
+  footer { color: #667089; }
+
+  .home { display: inline-block; margin-bottom: 8px; font-size: 12px; color: #9aa4b5; text-decoration: none; }
+  .home:hover { color: var(--accent); }
+
+  /* Resource bars */
+  #ragebar.mana { background: #0a1630; border-color: #1f3f7a; }
+  #ragebar.mana #ragefill { background: linear-gradient(#3b82f6, #1d4ed8); }
+  .floater.mana { color: #6fb0ff; font-size: 15px; }
+  .castbar { position: relative; height: 16px; border: 1px solid #2a3242; }
+  #castbar { background: linear-gradient(#f5c451, #c79100); }
+  #casttext {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-style: normal; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 1px 1px 2px #000;
+  }
+  #specbar { display: flex; gap: 6px; margin-top: 10px; }
+  #specbar button {
+    flex: 1; font: inherit; font-size: 14px; font-weight: 700; padding: 8px; cursor: pointer;
+    background: #171b24; color: #9aa4b5; border: 2px solid #2f394c; border-radius: 6px;
+  }
+  #specbar button:hover { border-color: #f58cba; }
+  #specbar button.active { background: #3a1f2c; color: #f58cba; border-color: #f58cba; }
+  :root { --accent: #f58cba; }
+
+  /* Hunter */
+  :root { --accent: #abd473; }
+</style>
+</head>
+<body>
+<aside id="buffpanel"></aside>
+<div id="app">
+  <a class="home" href="https://wowf-gameplay.github.io/">&larr; All WoW Forever sims</a>
+  <header>
+    <h1>WoW Forever &mdash; <span id="spec-title"></span> (60)</h1>
+    <div id="meter"></div>
+  </header>
+
+  <nav>
+    <button data-tab="combat" class="active">Combat</button>
+    <button data-tab="gear">Gear</button>
+    <button data-tab="talents">Talents</button>
+    <button data-tab="stats">Stats</button>
+  </nav>
+
+  <div id="tab-combat" class="tab active">
+  <div id="summary">
+    <h2>Damage Done</h2>
+    <div id="summary-body"></div>
+    <button class="reset">Reset</button>
+  </div>
+  <div id="arena">
+    <div id="hpbar"><div id="hpfill"></div><div id="hpmark"></div><div id="hptext"></div></div>
+    <div id="startwrap">
+      <button id="start">Start fight</button>
+      <label id="hpsetting">Dummy health <input id="hpinput" type="number" min="1000" max="100000000" step="5000"></label>
+    </div>
+    <div id="target">
+      <svg width="90" height="130" viewBox="0 0 90 130">
+        <rect x="41" y="60" width="8" height="70" fill="#6b4a2a"/>
+        <rect x="10" y="52" width="70" height="8" rx="3" fill="#7a5632"/>
+        <ellipse cx="45" cy="72" rx="20" ry="26" fill="#b08a55" stroke="#6b4a2a" stroke-width="2"/>
+        <circle cx="45" cy="28" r="18" fill="#c9a36a" stroke="#6b4a2a" stroke-width="2"/>
+        <circle cx="45" cy="72" r="9" fill="none" stroke="#a3160e" stroke-width="3"/>
+        <circle cx="45" cy="72" r="2.5" fill="#a3160e"/>
+      </svg>
+      Raid Boss Dummy (Level 63)
+    </div>
+  </div>
+
+  <div id="buffs"></div>
+  <div class="swing"><span>Main hand</span><div class="swingbar"><div id="mhbar"></div></div></div>
+  <div class="swing"><span>Off hand</span><div class="swingbar"><div id="ohbar"></div></div></div>
+
+  <div id="ragebar" class="mana"><div id="ragefill"></div><div id="ragetext"></div></div>
+  <div id="bar"></div>
+  <div id="keybar">
+    <button id="rebind">Change keybinds</button>
+    <button id="rebind-reset">Reset keybinds</button>
+    <span id="rebind-hint"></span>
+  </div>
+  <div id="log"></div>
+  <button class="reset">Reset</button>
+  <footer id="footer"></footer>
+  </div>
+
+  <div id="tab-gear" class="tab"></div>
+  <div id="tab-talents" class="tab"></div>
+  <div id="tab-stats" class="tab"></div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+const rand = (a, b) => a + Math.random() * (b - a);
+const iconUrl = name => `https://wow.zamimg.com/images/wow/icons/large/${name}.jpg`;
+const store = {
+  get(key, fallback) { try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
+};
+
+// ---------------------------------------------------------------------------
+// Character data. Gear, enchants and the talent build follow the MythicSim WoW Forever
+// "Survival Hunter" tier-list preset: a melee build with no pet (Lone Wolf).
+// ---------------------------------------------------------------------------
+const BASE = { race: 'Orc', str: 58, agi: 122, int: 62, spi: 73, ap: 100, mana: 1720, meleeCrit: 0, spellCrit: 3.6 };
+const CRIT_RATING_PER_PCT = 14, HIT_RATING_PER_PCT = 10;
+const CRIT_PER_AGI = 0.0189;
+const MANA_PER_INT = 15;
+const BATTLE_SHOUT_AP = 139;
+
+const ITEMS = {
+  mask:       { slot: 'Head', name: 'Mask of the Unforgiven', q: 'rare', icon: 'inv_misc_bandana_01', hitRating: 20, critRating: 14, enchant: '+8 Agility', ench: { agi: 8 } },
+  necklace:   { slot: 'Neck', name: 'Nacreous Shell Necklace', q: 'rare', icon: 'inv_jewelry_necklace_10', int: 8, sp: 9 },
+  truestrike: { slot: 'Shoulders', name: 'Truestrike Shoulders', q: 'rare', icon: 'inv_shoulder_10', ap: 24, hitRating: 20 },
+  baron:      { slot: 'Back', name: 'Cape of the Black Baron', q: 'rare', icon: 'inv_misc_cape_20', agi: 15, ap: 20, enchant: '+3 Agility', ench: { agi: 3 } },
+  savage:     { slot: 'Chest', name: 'Savage Gladiator Chain', q: 'epic', icon: 'inv_chest_chain_15', str: 16, agi: 14, critRating: 21, enchant: '+4 All Stats', ench: { str: 4, agi: 4, int: 4, spi: 4 } },
+  blackmist:  { slot: 'Wrist', name: 'Blackmist Armguards', q: 'rare', icon: 'inv_bracer_07', str: 5, hitRating: 10, enchant: '+9 Strength', ench: { str: 9 } },
+  gauntlets:  { slot: 'Hands', name: 'Bloodmail Gauntlets', q: 'rare', icon: 'inv_gauntlets_26', str: 9, int: 10, critRating: 14, enchant: '+7 Agility', ench: { agi: 7 } },
+  girdle:     { slot: 'Waist', name: "Marksman's Girdle", q: 'rare', icon: 'inv_belt_18', agi: 21, hitRating: 10 },
+  pants:      { slot: 'Legs', name: "Beaststalker's Pants", q: 'rare', icon: 'inv_pants_03', str: 6, agi: 26, int: 10, spi: 12, enchant: '+8 Agility', ench: { agi: 8 } },
+  greaves:    { slot: 'Feet', name: 'Windreaver Greaves', q: 'rare', icon: 'inv_boots_plate_04', agi: 20, hitRating: 10, enchant: '+7 Agility', ench: { agi: 7 } },
+  elven:      { slot: 'Ring', name: 'Tarnished Elven Ring', q: 'rare', icon: 'inv_jewelry_ring_13', agi: 15, hitRating: 10 },
+  blackstone: { slot: 'Ring', name: 'Blackstone Ring', q: 'rare', icon: 'inv_jewelry_ring_17', ap: 20, hitRating: 10 },
+  trinket:    { slot: 'Trinket', name: null },
+  iceblade:   { slot: 'Main hand', name: 'Iceblade Hacker', q: 'rare', icon: 'inv_axe_03', weapon: { min: 57, max: 106, speed: 2.0, type: 'Axe' },
+                enchant: 'Crusader', note: 'Melee attacks with it deal 41 Frost damage' },
+  bonescraper:{ slot: 'Off hand', name: 'Bonescraper', q: 'rare', icon: 'inv_weapon_shortblade_12', ap: 30, weapon: { min: 40, max: 74, speed: 1.4, type: 'Dagger' },
+                enchant: 'Crusader' },
+  firestick:  { slot: 'Ranged', name: 'Xorothian Firestick', q: 'rare', icon: 'inv_weapon_rifle_03', agi: 4, note: 'Not fired: this build fights in melee' },
+};
+const gearList = keys => keys.map(k => ITEMS[k]);
+
+// Talent trees (WoW Forever beta). [name, max, row, col, icon, description at max rank, new in Forever, prerequisite]
+const NEW = true;
+const TREES = [
+  { name: 'Beast Mastery', talents: [
+    ['Deadly Aspects', 5, 1, 2, 'spell_nature_ravenform', 'While Aspect of the Hawk is active, Auto Shot has a 10% chance of increasing ranged attack speed by 30% for 12 sec. While Aspect of the Beast is active, melee auto attacks have a 10% chance of increasing melee attack speed by 30% for 12 sec.', NEW],
+    ['Endurance Training', 5, 1, 3, 'spell_nature_reincarnation', 'Increases the Health and Armor of your pets by 15%.'],
+    ['Focused Fire', 2, 2, 1, 'inv_weapon_crossbow_10', 'Increases all damage you and your pet deal by 2% while your pet is active.', NEW],
+    ['Improved Aspect of the Monkey', 3, 2, 2, 'ability_hunter_aspectofthemonkey', 'Increases the Dodge bonus of your Aspect of the Monkey by 6%. Your pet gains 50% of the effect.'],
+    ['Pathfinding', 2, 2, 3, 'ability_mount_jungletiger', 'Increases the speed bonus of your Aspect of the Cheetah and Aspect of the Pack by 6%.'],
+    ['Improved Revive Pet', 2, 2, 4, 'ability_hunter_beastsoothe', 'Revive Pet casts 6 sec faster, costs 40% less mana, and returns the pet with 30% more health.'],
+    ['Bestial Swiftness', 1, 3, 2, 'ability_druid_dash', 'Increases the movement speed of your pets by 30%.'],
+    ['Unleashed Fury', 5, 3, 3, 'ability_bullrush', 'Increases the damage done by your pets and hawks by 15%.'],
+    ['Improved Mend Pet', 2, 4, 1, 'ability_hunter_mendpet', 'Mend Pet has a 50% chance to cleanse one harmful effect each heal and costs 20% less mana.'],
+    ['Ferocity', 5, 4, 3, 'inv_misc_monsterclaw_04', 'Increases the critical strike chance of your pets and hawks by 10%.'],
+    ['Summon Hawk', 1, 4, 4, 'ability_hunter_animalhandler', 'Summons a hawk to fight beside you. 80 mana, 6 sec cooldown.', NEW],
+    ['Spirit Bond', 2, 5, 1, 'ability_druid_demoralizingroar', 'While your pet is active, you and your pet regenerate 1% of total health every 5 sec.'],
+    ['Intimidation', 1, 5, 2, 'ability_devour', 'Your pet stuns its target for 3 sec. 1 min cooldown.'],
+    ['Bestial Discipline', 2, 5, 4, 'spell_nature_abolishmagic', 'Increases the Focus regeneration of your pets by 20% and allows 50% of your mana regeneration to continue while casting.'],
+    ['Frenzy', 5, 6, 3, 'inv_misc_monsterclaw_03', 'Gives your pet a 100% chance to gain 30% attack speed for 8 sec after a critical strike.'],
+    ['Bestial Wrath', 1, 7, 2, 'ability_druid_ferociousbite', 'Sends your pet into a rage: +50% damage and immunity to crowd control for 18 sec. 2 min cooldown.', false, 'Intimidation'],
+  ]},
+  { name: 'Marksmanship', talents: [
+    ['Hawk Eye', 3, 1, 1, 'ability_townwatch', 'Increases the range of your ranged weapons by 6 yards.'],
+    ['Improved Concussive Shot', 5, 1, 2, 'spell_frost_stun', 'Gives your Concussive Shot a 20% chance to stun the target for 3 sec.'],
+    ['Lethal Attacks', 5, 1, 3, 'ability_searingarrow', 'Increases your critical strike chance with all attacks by 5%.', NEW],
+    ['Improved Stings', 3, 2, 1, 'ability_hunter_quickshot', '+20% Serpent Sting damage, 6 sec less Viper Sting cooldown, and Scorpid Sting lasts 45 sec longer.', NEW],
+    ['Efficiency', 5, 2, 2, 'spell_frost_wizardmark', 'Reduces the mana cost of your Shots, Stings and melee abilities by 15%.'],
+    ['Careful Aim', 5, 2, 3, 'ability_hunter_zenarchery', 'Increases your Attack Power by 100% of your Intellect.', NEW],
+    ['Rapid Killing', 2, 3, 1, 'ability_hunter_rapidkilling', 'Rapid Fire cooldown reduced by 2 min; kills grant +20% damage on your next Shot within 20 sec.', NEW],
+    ['Improved Arcane Shot', 5, 3, 2, 'ability_impalingbolt', 'Reduces the cooldown of your Arcane Shot by 1.5 sec.'],
+    ['Lone Wolf', 1, 3, 4, 'ability_mount_whitedirewolf', 'You deal 20% increased damage with all attacks while you do not have an active pet.', NEW],
+    ['Trueshot Aura', 1, 4, 2, 'ability_trueshot', 'Party aura: +100 attack power. 180 mana.'],
+    ['Mortal Shots', 5, 4, 3, 'ability_piercedamage', 'Increases the critical strike damage bonus on all ranged abilities by 30%.', false, 'Lethal Attacks'],
+    ['Improved Serpent Sting', 5, 4, 4, 'ability_hunter_quickshot', 'Increases the damage done by your Serpent Sting by 10%.'],
+    ['Rapid Recuperation', 2, 5, 1, 'ability_hunter_rapidregeneration', 'Serpent Sting hits grant 50%, and consuming Rapid Killing 100%, of your mana regeneration while casting for 15 sec.', NEW],
+    ['Barrage', 3, 5, 3, 'ability_upgrademoonglaive', 'Increases the damage done by your Multi-Shot, Aimed Shot and Volley by 10%.'],
+    ['Scatter Shot', 1, 5, 4, 'ability_golemstormbolt', 'A short-range shot that disorients the target for 4 sec. 30 sec cooldown.'],
+    ['Ranged Weapon Specialization', 5, 6, 3, 'inv_weapon_rifle_06', 'Increases the damage you deal with ranged weapons by 5%.'],
+    ['Sniper Shot', 1, 7, 2, 'hunter_pvp_snipershot', 'A powerful 4 sec cast shot. 365 mana, 15 sec cooldown.', NEW],
+  ]},
+  { name: 'Survival', talents: [
+    ['Improved Tracking', 5, 1, 2, 'inv_misc_head_dragon_black', 'While tracking Beasts, Demons, Dragonkin, Elementals, Giants, Humanoids or Undead, all damage you deal to the tracked creature type is increased by 5%.', NEW],
+    ['Deflection', 5, 1, 3, 'ability_parry', 'Increases your Parry chance by 5%.'],
+    ['Entrapment', 5, 2, 1, 'spell_nature_stranglevines', 'When your traps are triggered, all affected targets are Entrapped for 5 sec.'],
+    ['Savage Strikes', 2, 2, 2, 'ability_racial_bloodrage', 'Increases the critical strike chance of all your melee abilities by 4%.'],
+    ['Survivalist', 5, 2, 3, 'spell_shadow_twilight', 'Increases your total Health by 10%.'],
+    ['Improved Wing Clip', 3, 2, 4, 'ability_rogue_trip', 'Gives your Wing Clip a 20% chance to immobilize the target for 5 sec.'],
+    ['Clever Traps', 2, 3, 1, 'spell_nature_timestop', 'Freezing and Frost trap effects last 30% longer; Immolation and Explosive trap damage is increased by 30%.'],
+    ['Surefooted', 3, 3, 2, 'ability_kick', 'Increases your hit chance by 3% and reduces the duration of movement impairing effects on you by 30%.'],
+    ['Deterrence', 1, 3, 3, 'ability_whirlwind', '+25% dodge and parry for 10 sec. 5 min cooldown.'],
+    ['Survival Tactics', 2, 4, 1, 'ability_ensnare', 'Increases your chance to hit with your Trap and Feign Death abilities by 10%.'],
+    ["Predator's Edge", 5, 4, 2, 'ability_dualwield', 'Increases your melee critical strike damage by 30% and your off-hand weapon damage by 50%.', NEW],
+    ['Counterattack', 1, 4, 3, 'ability_warrior_challange', 'A counterattack after you parry that immobilizes the target for 5 sec. 30 mana, 5 sec cooldown.', false, 'Deterrence'],
+    ['Resourcefulness', 2, 5, 1, 'ability_hunter_resourcefulness', 'Reduces the mana cost of your Trap abilities and melee abilities by 60%. Your critical strikes allow 50% of your mana regeneration to continue while casting for 30 sec.', NEW],
+    ['Expose Prey', 2, 5, 2, 'ability_hunter_swiftstrike', "Your attacks against targets with Hunter's Mark have a 10% chance to activate your Mongoose Bite for 5 sec.", NEW],
+    ["Survivalist's Discipline", 2, 5, 3, 'ability_hunter_mastertactitian', 'Reduces the cooldown of your Trap and Deterrence abilities by 40%.', NEW],
+    ['Strider Kick', 1, 5, 4, 'ability_hunter_pet_tallstrider', 'A powerful kick for 100% melee weapon damage that increases movement speed by 30% for 3 sec. 8 sec cooldown.', NEW],
+    ['Lightning Reflexes', 5, 6, 3, 'spell_nature_invisibilty', 'Increases your Agility by 10%.'],
+    ['Lacerating Strikes', 1, 7, 2, 'ability_gouge', 'Your Mongoose Bite also causes the target to bleed for 40% of the damage done by Mongoose Bite over 21 sec.', NEW],
+  ]},
+];
+// Talents the simulation models when taken
+const SIM_TALENTS = new Set(['Deadly Aspects', 'Lethal Attacks', 'Careful Aim', 'Lone Wolf', 'Improved Tracking', 'Savage Strikes', 'Clever Traps', 'Surefooted',
+  "Predator's Edge", 'Resourcefulness', 'Expose Prey', "Survivalist's Discipline", 'Strider Kick', 'Lightning Reflexes', 'Lacerating Strikes']);
+
+const SPECS = {
+  survival: {
+    name: 'Survival (melee)', title: 'Survival Hunter',
+    talents: {
+      'Deadly Aspects': 5,
+      'Lethal Attacks': 5, 'Careful Aim': 5, 'Lone Wolf': 1,
+      'Improved Tracking': 5, 'Entrapment': 3, 'Savage Strikes': 2, 'Clever Traps': 2, 'Surefooted': 3, 'Survival Tactics': 2, "Predator's Edge": 5,
+      'Resourcefulness': 2, 'Expose Prey': 2, "Survivalist's Discipline": 2, 'Strider Kick': 1, 'Lightning Reflexes': 5, 'Lacerating Strikes': 1,
+    },
+    gear: gearList(['mask', 'necklace', 'truestrike', 'baron', 'savage', 'blackmist', 'gauntlets', 'girdle', 'pants', 'greaves', 'elven', 'blackstone',
+      'trinket', 'trinket', 'iceblade', 'bonescraper', 'firestick']),
+    bar: ['raptor', 'mongoose', 'kick', 'trap', 'wingclip', 'rapidfire', 'bloodfury', 'manapotion'],
+    blurb: 'Keep Raptor Strike queued, Mongoose Bite whenever Expose Prey lights it up, Strider Kick and Immolation Trap on cooldown, and Wing Clip with spare mana.',
+  },
+};
+let SPEC_ID = 'survival';
+let SPEC = SPECS[SPEC_ID];
+const T = name => SPEC.talents[name] || 0;   // points in a talent
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+const CFG = {
+  // Set by applySetup()
+  ap: 0, crit: 0, spellCrit: 0, hit: 0, sp: 0, maxMana: 0, mp5: 0, spiritMp5: 0, mh: null, oh: null,
+  crusaderAp: 0, windfury: false, chili: false, mark: false, jow: false, coe: 1, arthas: 0, armorMult: 1, targetArmor: 0,
+
+  targetHp: 75000, bossArmor: 3731,
+  // Level 60 vs level 63 boss
+  baseMiss: 9, dwMissPenalty: 19, dodge: 6.5, glanceChance: 40, glanceMult: 0.65, critSuppression: 4.8,
+  baseSpellMiss: 17, minSpellMiss: 1,
+  gcd: 1.5,
+  normalizedSpeed: 2.4,       // one-handed weapons
+  fiveSecondRule: 5,
+  // Abilities (Forever tooltips; Mongoose Bite's flat part fitted to MythicSim's results)
+  raptorCost: 40, raptorCd: 6, raptorBonus: 70,
+  mongooseCost: 26, mongooseCd: 5, mongooseBonus: 240, mongooseWindow: 5,
+  lacerateTicks: 4, lacerateEvery: 5.25,   // MythicSim's bleed lands as 4 ticks over 21 sec; a new Mongoose Bite replaces it
+  kickCost: 99, kickCd: 8,
+  trapCost: 98, trapCd: 18, trapTick: 138, trapTicks: 5, trapEvery: 3,
+  wingClipCost: 32, wingClipDamage: 50,
+  rapidFireCost: 100, rapidFireCd: 300, rapidFireHaste: 0.4, rapidFireDuration: 15,
+  bloodFuryCd: 120, bloodFuryMult: 1.1, bloodFuryDuration: 15,
+  manaPotionCd: 120, manaPotionMin: 1350, manaPotionMax: 2250,
+  // Procs
+  icebladeFrost: 41,                                        // Iceblade Hacker: Frost damage on every landed main hand attack
+  quickStrikesChance: 0.1, quickStrikesHaste: 0.3, quickStrikesDuration: 12,   // Deadly Aspects with Aspect of the Beast
+  exposePreyChance: 0.1,                                    // Expose Prey 2/2
+  resourcefulDuration: 30,
+  jowChance: 0.5, jowMana: 59,                              // Judgement of Wisdom
+  crusaderPpm: 1, windfuryChance: 0.2, windfuryAp: 246,
+  chiliChance: 0.05, chiliCd: 10, chiliMin: 57, chiliMax: 73,
+};
+
+// Setup toggles (WoW Forever values where known)
+const RAID_BUFFS = [
+  { id: 'shout',      name: 'Battle Shout',              icon: 'ability_warrior_battleshout',        desc: '+139 attack power', on: true },
+  { id: 'might',      name: 'Greater Blessing of Might', icon: 'spell_holy_greaterblessingofkings',  desc: '+133 attack power', on: true },
+  { id: 'kings',      name: 'Greater Blessing of Kings', icon: 'spell_magic_greaterblessingofkings', desc: '+10% to all stats', on: true },
+  { id: 'wisdom',     name: 'Greater Blessing of Wisdom',icon: 'spell_holy_greaterblessingofwisdom', desc: '+33 mana per 5 sec', on: true },
+  { id: 'gotw',       name: 'Gift of the Wild',          icon: 'spell_nature_regeneration',          desc: '+16 to all stats', on: true },
+  { id: 'brilliance', name: 'Arcane Brilliance',         icon: 'spell_holy_arcaneintellect',         desc: '+31 Intellect', on: true },
+  { id: 'prayer',     name: 'Prayer of Spirit',          icon: 'spell_holy_prayerofspirit',          desc: '+40 Spirit', on: true },
+  { id: 'lotp',       name: 'Leader of the Pack',        icon: 'spell_nature_unyeildingstamina',     desc: '+3% crit chance', on: true },
+  { id: 'soe',        name: 'Strength of Earth Totem',   icon: 'spell_nature_earthbindtotem',        desc: '+53 Strength', on: true },
+  { id: 'manaspring', name: 'Mana Spring Totem',         icon: 'spell_nature_manaregentotem',        desc: '+25 mana per 5 sec', on: true },
+  { id: 'trueshot',   name: 'Trueshot Aura',             icon: 'ability_trueshot',                   desc: '+100 attack power (MythicSim lists it but its engine does not apply it)', on: true },
+  { id: 'wf',         name: 'Windfury Totem',            icon: 'spell_nature_windfury',              desc: 'Melee hits: 20% chance for an extra main-hand attack with +246 attack power', on: true },
+];
+const CONSUMABLES = [
+  { id: 'mongoose',  name: 'Elixir of the Mongoose',      icon: 'inv_potion_32',             desc: '+25 Agility, +2% crit chance', on: true },
+  { id: 'scorpok',   name: 'Ground Scorpok Assay',        icon: 'inv_misc_dust_02',          desc: '+25 Agility', on: true },
+  { id: 'jujupower', name: 'Juju Power',                  icon: 'inv_misc_monsterscales_11', desc: '+30 Strength', on: true },
+  { id: 'jujumight', name: 'Juju Might',                  icon: 'inv_misc_monsterscales_07', desc: '+40 attack power', on: true },
+  { id: 'dumplings', name: 'Smoked Desert Dumplings',     icon: 'inv_misc_food_64',          desc: '+20 Strength', on: true },
+  { id: 'stones',    name: 'Elemental Sharpening Stones', icon: 'inv_stone_02',              desc: '+2% crit chance per weapon (+4% total)', on: true },
+  { id: 'chili',     name: 'Dragonbreath Chili',          icon: 'inv_drink_17',              desc: 'Melee hits: 5% chance to deal 57 to 73 fire damage (10 sec cooldown)', on: true },
+];
+const BOSS_DEBUFFS = [
+  { id: 'sunder', name: 'Sunder Armor / Expose Armor', icon: 'ability_warrior_sunder',       desc: '-2250 armor (the two do not stack)', on: true },
+  { id: 'ff',     name: 'Faerie Fire',                 icon: 'spell_nature_faeriefire',      desc: '-505 armor', on: true },
+  { id: 'cor',    name: 'Curse of Recklessness',       icon: 'spell_shadow_unholystrength',  desc: '-505 armor', on: true },
+  { id: 'coe',    name: 'Curse of the Elements',       icon: 'spell_shadow_chilltouch',      desc: '+10% Fire and Frost damage taken', on: true },
+  { id: 'mark',   name: "Hunter's Mark",               icon: 'ability_hunter_snipershot',    desc: 'Lets Expose Prey proc Mongoose Bite', on: true },
+  { id: 'jow',    name: 'Judgement of Wisdom',         icon: 'spell_holy_righteousnessaura', desc: 'Melee hits: 50% chance to restore 59 mana', on: true },
+  { id: 'arthas', name: 'Gift of Arthas',              icon: 'spell_nature_nullifydisease',  desc: '+8 physical damage taken per hit', on: true },
+];
+const TOGGLE_GROUPS = [
+  { title: 'Raid buffs', items: RAID_BUFFS },
+  { title: 'Consumables', items: CONSUMABLES },
+  { title: 'Boss debuffs', items: BOSS_DEBUFFS },
+];
+const ALL_TOGGLES = TOGGLE_GROUPS.flatMap(g => g.items);
+
+// ---------------------------------------------------------------------------
+// Stats
+// ---------------------------------------------------------------------------
+const gearSum = k => SPEC.gear.reduce((n, g) => n + (g[k] || 0) + (g.ench?.[k] || 0), 0);
+const STATS = { str: 0, agi: 0, int: 0, spi: 0 };
+const mhItem = () => SPEC.gear.find(g => g.slot === 'Main hand');
+const ohItem = () => SPEC.gear.find(g => g.slot === 'Off hand');
+const ASPECT_OF_THE_BEAST_AP = 110;
+const axeCrit = () => BASE.race === 'Orc' && mhItem().weapon.type === 'Axe' ? 1 : 0;   // Orc Axe Specialization
+
+// Unbuffed character-sheet stats from the gear list, talents and Aspect of the Beast included
+function gearSheet() {
+  const str = BASE.str + gearSum('str');
+  const agi = Math.round((BASE.agi + gearSum('agi')) * (1 + 0.02 * T('Lightning Reflexes')));
+  const int = BASE.int + gearSum('int');
+  const spi = BASE.spi + gearSum('spi');
+  const mh = mhItem().weapon, oh = ohItem().weapon;
+  return {
+    str, agi, int, spi,
+    // 1 AP per Strength and per Agility, Careful Aim adds Intellect, Aspect of the Beast +110
+    ap: BASE.ap + str + agi + Math.round(0.2 * T('Careful Aim') * int) + gearSum('ap') + ASPECT_OF_THE_BEAST_AP,
+    crit: +(BASE.meleeCrit + agi * CRIT_PER_AGI + gearSum('critRating') / CRIT_RATING_PER_PCT + T('Lethal Attacks') + axeCrit()).toFixed(2),
+    hit: gearSum('hitRating') / HIT_RATING_PER_PCT + T('Surefooted'),
+    sp: gearSum('sp'),
+    mhMin: mh.min, mhMax: mh.max, mhSpeed: mh.speed, ohMin: oh.min, ohMax: oh.max, ohSpeed: oh.speed,
+  };
+}
+
+// Custom stats (Stats tab)
+const CUSTOM_ALL = { survival: { on: false, ...gearSheet(), ...store.get('hunterSimCustomStats_survival', {}) } };
+const custom = () => CUSTOM_ALL[SPEC_ID];
+
+function applySetup() {
+  const on = id => ALL_TOGGLES.find(b => b.id === id).on;
+  const kings = on('kings') ? 1.1 : 1;
+  const all = on('gotw') ? 16 : 0;
+  const sheet = custom().on ? custom() : gearSheet();
+  const str = all + (on('soe') ? 53 : 0) + (on('jujupower') ? 30 : 0) + (on('dumplings') ? 20 : 0);
+  const agi = (all + (on('mongoose') ? 25 : 0) + (on('scorpok') ? 25 : 0)) * (1 + 0.02 * T('Lightning Reflexes'));
+  const int = all + (on('brilliance') ? 31 : 0);
+  const spi = all + (on('prayer') ? 40 : 0);
+  STATS.str = Math.round((sheet.str + str) * kings);
+  STATS.agi = Math.round((sheet.agi + agi) * kings);
+  STATS.int = Math.round((sheet.int + int) * kings);
+  STATS.spi = Math.round((sheet.spi + spi) * kings);
+  // Buffs add on top of the sheet: 1 AP per Strength, Agility and (Careful Aim) Intellect gained
+  CFG.ap = Math.round(sheet.ap + (STATS.str - sheet.str) + (STATS.agi - sheet.agi) + 0.2 * T('Careful Aim') * (STATS.int - sheet.int) +
+    (on('shout') ? BATTLE_SHOUT_AP : 0) + (on('might') ? 133 : 0) + (on('jujumight') ? 40 : 0) + (on('trueshot') ? 100 : 0));
+  CFG.crit = sheet.crit + (STATS.agi - sheet.agi) * CRIT_PER_AGI + (on('lotp') ? 3 : 0) + (on('mongoose') ? 2 : 0) + (on('stones') ? 4 : 0);
+  // Spell crit (Iceblade Hacker's frost, Immolation Trap ticks): base, Intellect, gear, Lethal Attacks, buffs
+  CFG.spellCrit = BASE.spellCrit + STATS.int / 100 + gearSum('critRating') / CRIT_RATING_PER_PCT + T('Lethal Attacks') + (on('lotp') ? 3 : 0) + (on('mongoose') ? 2 : 0);
+  CFG.hit = sheet.hit;
+  CFG.sp = sheet.sp;
+  CFG.maxMana = BASE.mana + MANA_PER_INT * STATS.int;
+  CFG.mp5 = (on('wisdom') ? 33 : 0) + (on('manaspring') ? 25 : 0);
+  CFG.spiritMp5 = 0.27 * STATS.spi;
+  CFG.mh = { min: sheet.mhMin, max: sheet.mhMax, speed: sheet.mhSpeed };
+  CFG.oh = { min: sheet.ohMin, max: sheet.ohMax, speed: sheet.ohSpeed };
+  CFG.crusaderAp = Math.round(200 * kings);
+  CFG.windfury = on('wf');
+  CFG.chili = on('chili');
+  CFG.mark = on('mark');
+  CFG.jow = on('jow');
+  CFG.coe = on('coe') ? 1.1 : 1;
+  CFG.arthas = on('arthas') ? 8 : 0;
+  // Boss armor after debuffs; damage reduction = armor / (armor + 400 + 85 * attacker level)
+  CFG.targetArmor = Math.max(0, CFG.bossArmor - (on('sunder') ? 2250 : 0) - (on('ff') ? 505 : 0) - (on('cor') ? 505 : 0));
+  CFG.armorMult = 1 - CFG.targetArmor / (CFG.targetArmor + 400 + 85 * 60);
+}
+applySetup();
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const newState = () => ({
+  t: 0, mana: CFG.maxMana, gcdUntil: 0, ready: {}, queued: null, cast: null,
+  mhProg: 0, ohProg: 0.5, lastSpend: -10,
+  buffs: { quick: 0, rapid: 0, bloodFury: 0, resourceful: 0, crusMH: 0, crusOH: 0 },
+  mongooseUntil: 0,
+  trap: { ticks: 0, next: 0, dmg: 0 }, lacerate: { ticks: 0, next: 0, dmg: 0 },
+  chiliReady: 0,
+  totalDamage: 0, hp: CFG.targetHp, started: false, over: false,
+  stats: {}, manaSpent: 0, manaGained: 0,
+});
+const S = newState();
+const statFor = name => S.stats[name] ??= { dmg: 0, hits: 0, crits: 0, avoided: 0 };
+
+const addMana = n => { const g = Math.min(n, CFG.maxMana - S.mana); S.mana += g; S.manaGained += g; };
+const ap = () => (CFG.ap + CFG.crusaderAp * ((S.t < S.buffs.crusMH) + (S.t < S.buffs.crusOH))) * (S.t < S.buffs.bloodFury ? CFG.bloodFuryMult : 1);
+const meleeCrit = () => Math.max(0, CFG.crit - CFG.critSuppression);
+const weaponRoll = (w, speedForAp) => rand(w.min, w.max) + ap() / 14 * (speedForAp ?? w.speed);
+const haste = () => (S.t < S.buffs.quick ? 1 + CFG.quickStrikesHaste : 1) * (S.t < S.buffs.rapid ? 1 + CFG.rapidFireHaste : 1);
+// Lone Wolf and Improved Tracking raise all damage; Curse of the Elements raises Fire and Frost
+const dmgMult = () => (T('Lone Wolf') ? 1.2 : 1) * (1 + 0.01 * T('Improved Tracking'));
+const physMult = () => CFG.armorMult * dmgMult();
+const magicMult = () => dmgMult() * CFG.coe;
+const abilityCritMult = () => 2 + 0.06 * T("Predator's Edge");
+
+// ---------------------------------------------------------------------------
+// Attack tables
+// ---------------------------------------------------------------------------
+function rollWhite() {
+  let r = Math.random() * 100;
+  if ((r -= Math.max(0, CFG.baseMiss + CFG.dwMissPenalty - CFG.hit)) < 0) return 'miss';
+  if ((r -= CFG.dodge) < 0) return 'dodge';
+  if ((r -= CFG.glanceChance) < 0) return 'glance';
+  if ((r -= meleeCrit()) < 0) return 'crit';
+  return 'hit';
+}
+function rollYellow() {
+  const miss = Math.max(0, CFG.baseMiss - CFG.hit);
+  const r = Math.random() * 100;
+  if (r < miss) return 'miss';
+  if (r < miss + CFG.dodge) return 'dodge';
+  return Math.random() * 100 < meleeCrit() + 2 * T('Savage Strikes') ? 'crit' : 'hit';
+}
+function rollSpell() {
+  if (Math.random() * 100 < Math.max(CFG.minSpellMiss, CFG.baseSpellMiss - CFG.hit)) return 'miss';
+  return Math.random() * 100 < CFG.spellCrit ? 'crit' : 'hit';
+}
+
+// ---------------------------------------------------------------------------
+// Damage plumbing
+// ---------------------------------------------------------------------------
+function damageTarget(name, dmg, crit) {
+  dmg = Math.min(dmg, Math.ceil(S.hp));
+  S.totalDamage += dmg;
+  S.hp -= dmg;
+  const st = statFor(name);
+  st.dmg += dmg; st.hits++; if (crit) st.crits++;
+  if (S.hp <= 0) endFight();
+  return dmg;
+}
+
+function onCrit() {
+  // Resourcefulness: crits let half your mana regeneration continue while casting
+  if (T('Resourcefulness')) S.buffs.resourceful = S.t + CFG.resourcefulDuration;
+}
+
+function deal(name, dmg, crit, cls) {
+  if (S.over) return 0;
+  dmg = damageTarget(name, Math.round(dmg), crit);
+  floater(dmg + (crit ? '!' : ''), cls + (crit ? ' crit' : ''));
+  log(`<span class="${cls.startsWith('yellow') ? 'y' : 'w'}">${name} ${crit ? 'crits' : 'hits'} for ${dmg}.</span>`);
+  if (crit) onCrit();
+  targetEl.classList.remove('hit'); void targetEl.offsetWidth; targetEl.classList.add('hit');
+  return dmg;
+}
+
+function avoided(name, res) {
+  if (S.over) return;
+  statFor(name).avoided++;
+  const word = res === 'dodge' ? 'Dodge' : 'Miss';
+  floater(word, 'avoid');
+  log(`${name}: ${word.toLowerCase()}.`);
+}
+
+function procDamage(name, dmg, crit) {
+  dmg = damageTarget(name, Math.round(dmg), crit);
+  floater(dmg + (crit ? '!' : ''), 'yellow bleed' + (crit ? ' crit' : ''));
+  log(`<span class="y">${name} ${crit ? 'crits' : 'hits'} for ${dmg}.</span>`);
+  if (crit) onCrit();
+}
+
+// Effects that follow a landed melee hit. kind: 'white' | 'extra' | 'ability'; isOffhand for off-hand swings
+function onMeleeHit(kind, isOffhand) {
+  if (S.over) return;
+  const w = isOffhand ? CFG.oh : CFG.mh;
+  // Iceblade Hacker: Frost damage with every main hand swing or ability (not extra attacks); rolls spell hit and spell crit
+  if (!isOffhand && kind !== 'extra' && mhItem().name === 'Iceblade Hacker') {
+    const res = rollSpell();
+    if (res === 'miss') statFor('Iceblade Hacker').avoided++;
+    else procDamage('Iceblade Hacker', (CFG.icebladeFrost + CFG.sp) * magicMult() * (res === 'crit' ? 1.5 : 1), res === 'crit');
+  }
+  // Judgement of Wisdom: mana back on hits
+  if (CFG.jow && Math.random() < CFG.jowChance) addMana(CFG.jowMana);
+  // Expose Prey: attacks on a marked target can enable Mongoose Bite
+  if (CFG.mark && T('Expose Prey') && Math.random() < 0.05 * T('Expose Prey')) {
+    if (S.t >= S.mongooseUntil) log('<span class="r">Expose Prey: Mongoose Bite is ready.</span>');
+    S.mongooseUntil = S.t + CFG.mongooseWindow;
+  }
+  // Deadly Aspects (Aspect of the Beast): auto attacks can grant Quick Strikes
+  if (kind !== 'ability' && T('Deadly Aspects') && Math.random() < 0.02 * T('Deadly Aspects') * 1) {
+    if (S.t >= S.buffs.quick) log('<span class="r">You gain Quick Strikes.</span>');
+    S.buffs.quick = S.t + CFG.quickStrikesDuration;
+  }
+  if (Math.random() < CFG.crusaderPpm * w.speed / 60) {
+    const key = isOffhand ? 'crusOH' : 'crusMH';
+    if (S.t >= S.buffs[key]) log('<span class="r">You gain Holy Strength.</span>');
+    S.buffs[key] = S.t + 15;
+  }
+  if (CFG.chili && S.t >= S.chiliReady && Math.random() < CFG.chiliChance) {
+    S.chiliReady = S.t + CFG.chiliCd;
+    procDamage('Dragonbreath Chili', rand(CFG.chiliMin, CFG.chiliMax), false);
+  }
+  // Windfury Totem: any landed melee hit, both hands; not its own extra attacks
+  if (CFG.windfury && kind !== 'extra' && Math.random() < CFG.windfuryChance) {
+    log('<span class="r">Windfury grants an extra attack.</span>');
+    whiteAttack(false, true);
+  }
+}
+
+function whiteAttack(isOffhand, extra) {
+  if (S.over) return;
+  const w = isOffhand ? CFG.oh : CFG.mh;
+  const name = extra ? 'Windfury Attack' : isOffhand ? 'Melee (Off Hand)' : 'Melee';
+  const res = rollWhite();
+  if (res === 'miss' || res === 'dodge') return avoided(name, res);
+  let dmg = (weaponRoll(w) + (extra ? CFG.windfuryAp / 14 * w.speed : 0)) * physMult();
+  if (isOffhand) dmg *= 0.5 * (1 + 0.1 * T("Predator's Edge"));   // off hand: 50%, Predator's Edge +50% of that
+  if (res === 'glance') dmg *= CFG.glanceMult;
+  if (res === 'crit') dmg *= 2;
+  deal(name, dmg + CFG.arthas, res === 'crit', 'white');
+  onMeleeHit(extra ? 'extra' : 'white', isOffhand);
+}
+
+// Melee ability on the main hand: `base` is pre-armor damage
+function abilityHit(name, base, cost) {
+  const res = rollYellow();
+  if (res === 'miss' || res === 'dodge') { avoided(name, res); return 0; }
+  const crit = res === 'crit';
+  const dmg = deal(name, base * physMult() * (crit ? abilityCritMult() : 1) + CFG.arthas, crit, 'yellow');
+  onMeleeHit('ability', false);
+  return dmg;
+}
+
+function mainHandSwing() {
+  const q = S.queued && ABILITY[S.queued];
+  S.queued = null;
+  if (q) abilityHit(q.name, weaponRoll(CFG.mh) + CFG.raptorBonus);
+  else whiteAttack(false, false);
+}
+
+// ---------------------------------------------------------------------------
+// Abilities
+// ---------------------------------------------------------------------------
+const ABILITIES = [
+  { id: 'raptor', name: 'Raptor Strike', icon: 'ability_meleedamage', cd: CFG.raptorCd, gcd: false, queue: true,
+    cost: () => CFG.raptorCost,
+    desc: 'Your next main hand swing deals weapon damage plus 70. 6 sec cooldown, not on the global cooldown. Press again to cancel.' },
+  { id: 'mongoose', name: 'Mongoose Bite', icon: 'ability_hunter_swiftstrike', cd: CFG.mongooseCd, gcd: true, proc: true,
+    cost: () => CFG.mongooseCost,
+    desc: 'Normalized weapon damage plus 240. Only usable for 5 sec after Expose Prey procs (10% of your attacks on a marked target). Lacerating Strikes bleeds for 40% of the damage over 21 sec (4 ticks; a new bite replaces it). 5 sec cooldown.',
+    usable: () => S.t < S.mongooseUntil,
+    use() {
+      S.mongooseUntil = 0;
+      const dmg = abilityHit(this.name, weaponRoll(CFG.mh, CFG.normalizedSpeed) + CFG.mongooseBonus);
+      if (dmg && T('Lacerating Strikes')) S.lacerate = { ticks: CFG.lacerateTicks, next: S.t + CFG.lacerateEvery, dmg: 0.4 * dmg / CFG.lacerateTicks };
+    } },
+  { id: 'kick', name: 'Strider Kick', icon: 'ability_hunter_pet_tallstrider', cd: CFG.kickCd, gcd: true, talent: 'Strider Kick',
+    cost: () => CFG.kickCost,
+    desc: '100% normalized weapon damage. 8 sec cooldown.',
+    use() { abilityHit(this.name, weaponRoll(CFG.mh, CFG.normalizedSpeed)); } },
+  { id: 'trap', name: 'Immolation Trap', icon: 'spell_fire_flameshock', cd: CFG.trapCd, gcd: true,
+    cost: () => CFG.trapCost,
+    desc: 'The dummy stands on it at once: burns for 690 Fire damage over 15 sec, +30% from Clever Traps; ticks can crit. 18 sec cooldown (Survivalist\'s Discipline).',
+    use() {
+      if (rollSpell() === 'miss') { statFor(this.name).avoided++; floater('Resist', 'avoid'); log(`${this.name}: resisted.`); return; }
+      S.trap = { ticks: CFG.trapTicks, next: S.t + CFG.trapEvery, dmg: (CFG.trapTick + CFG.sp) * (1 + 0.15 * T('Clever Traps')) * magicMult() };
+      log('<span class="y">Immolation Trap is triggered.</span>');
+    } },
+  { id: 'wingclip', name: 'Wing Clip', icon: 'ability_rogue_trip', cd: 0, gcd: true,
+    cost: () => CFG.wingClipCost,
+    desc: '50 damage. A cheap filler that can crit and trigger procs.',
+    use() { abilityHit(this.name, CFG.wingClipDamage); } },
+  { id: 'rapidfire', name: 'Rapid Fire', icon: 'ability_hunter_runningshot', cd: CFG.rapidFireCd, gcd: false,
+    cost: () => CFG.rapidFireCost,
+    desc: '+40% melee attack speed for 15 sec. 5 min cooldown. Not on the global cooldown.',
+    use() { S.buffs.rapid = S.t + CFG.rapidFireDuration; log('<span class="r">You gain Rapid Fire.</span>'); } },
+  { id: 'bloodfury', name: 'Blood Fury', icon: 'racial_orc_berserkerstrength', cd: CFG.bloodFuryCd, gcd: false,
+    cost: () => 0,
+    desc: 'Orc racial: +10% attack power for 15 sec. 2 min cooldown. Not on the global cooldown.',
+    use() { S.buffs.bloodFury = S.t + CFG.bloodFuryDuration; log('<span class="r">You gain Blood Fury.</span>'); } },
+  { id: 'manapotion', name: 'Major Mana Potion', icon: 'inv_potion_76', cd: CFG.manaPotionCd, gcd: false,
+    cost: () => 0,
+    desc: 'Restores 1350 to 2250 mana. 2 min cooldown. Not on the global cooldown.',
+    use() { const n = Math.round(rand(CFG.manaPotionMin, CFG.manaPotionMax)); addMana(n); floater(`+${n} Mana`, 'mana'); log(`<span class="r">Major Mana Potion: +${n} mana.</span>`); } },
+];
+const ABILITY = Object.fromEntries(ABILITIES.map(a => [a.id, a]));
+const cdOf = a => typeof a.cd === 'function' ? a.cd() : a.cd;
+const barAbilities = () => SPEC.bar.map(id => ABILITY[id]);
+const canAfford = a => S.mana >= a.cost();
+const costLabel = a => a.cost() ? `${Math.round(a.cost())} mana` : 'No cost';
+const costBadge = a => a.cost() ? Math.round(a.cost()) : '';
+
+function spend(cost) { S.mana -= cost; S.manaSpent += cost; if (cost > 0) S.lastSpend = S.t; }
+
+function press(a) {
+  if (!S.started || S.over) return;
+  const cost = a.cost();
+  if (a.queue) {
+    if (S.queued === a.id) { S.queued = null; return; }
+    if (S.t < (S.ready[a.id] || 0) || !canAfford(a)) return deny(a);
+    spend(cost); S.ready[a.id] = S.t + cdOf(a); S.queued = a.id;
+    return;
+  }
+  if (S.t < (S.ready[a.id] || 0) || (a.gcd && S.t < S.gcdUntil) || !canAfford(a) || (a.usable && !a.usable())) return deny(a);
+  spend(cost);
+  S.ready[a.id] = S.t + cdOf(a);
+  if (a.gcd) S.gcdUntil = S.t + CFG.gcd;
+  a.use(cost);
+}
+
+function deny(a) {
+  if (!a.el) return;
+  a.el.classList.remove('denied'); void a.el.offsetWidth; a.el.classList.add('denied');
+}
+
+// ---------------------------------------------------------------------------
+// Simulation tick
+// ---------------------------------------------------------------------------
+function tick(dt) {
+  S.t += dt;
+
+  // Mana: buffs tick all the time; Spirit regeneration pauses for 5 sec after spending mana, except that
+  // Resourcefulness (after a crit) lets half of it continue
+  const casting = S.t - S.lastSpend < CFG.fiveSecondRule;
+  const spirit = CFG.spiritMp5 * (casting ? (S.t < S.buffs.resourceful ? 0.5 : 0) : 1);
+  addMana((CFG.mp5 + spirit) / 5 * dt);
+
+  // Immolation Trap and Lacerating Strikes ticks (bleed ignores armor); both can crit
+  for (const [key, name, mult] of [['trap', 'Immolation Trap', 1], ['lacerate', 'Lacerating Strikes', 1]]) {
+    const d = S[key];
+    while (d.ticks > 0 && S.t >= d.next && !S.over) {
+      d.ticks--; d.next += key === 'trap' ? CFG.trapEvery : CFG.lacerateEvery;
+      const crit = Math.random() * 100 < (key === 'trap' ? CFG.spellCrit : meleeCrit());
+      procDamage(name, d.dmg * mult * (crit ? 1.5 : 1), crit);
+    }
+  }
+
+  const h = haste();
+  S.mhProg += dt * h / CFG.mh.speed;
+  S.ohProg += dt * h / CFG.oh.speed;
+  if (S.mhProg >= 1) { S.mhProg -= 1; mainHandSwing(); }
+  if (S.ohProg >= 1) { S.ohProg -= 1; whiteAttack(true, false); }
+}
+
+// Class-specific pieces used by the shared interface code
+function classBuffs() {
+  const buffs = [];
+  if (S.t < S.buffs.quick) buffs.push(['spell_nature_ravenform', `Quick Strikes ${fmtTime(S.buffs.quick - S.t)}`]);
+  if (S.t < S.buffs.rapid) buffs.push(['ability_hunter_runningshot', `Rapid Fire ${fmtTime(S.buffs.rapid - S.t)}`]);
+  if (S.t < S.buffs.bloodFury) buffs.push(['racial_orc_berserkerstrength', `Blood Fury ${fmtTime(S.buffs.bloodFury - S.t)}`]);
+  if (S.t < S.mongooseUntil) buffs.push(['ability_hunter_swiftstrike', `Expose Prey ${fmtTime(S.mongooseUntil - S.t)}`]);
+  if (S.trap.ticks > 0) buffs.push(['spell_fire_flameshock', `Immolation Trap (${S.trap.ticks})`]);
+  if (S.lacerate.ticks > 0) buffs.push(['ability_gouge', `Lacerating Strikes (${S.lacerate.ticks})`]);
+  if (S.t < S.buffs.resourceful) buffs.push(['ability_hunter_resourcefulness', `Resourcefulness ${fmtTime(S.buffs.resourceful - S.t)}`]);
+  if (S.t < S.buffs.crusMH) buffs.push(['spell_holy_blessingofstrength', `Holy Strength ${fmtTime(S.buffs.crusMH - S.t)}`]);
+  if (S.t < S.buffs.crusOH) buffs.push(['spell_holy_blessingofstrength', `Holy Strength (off hand) ${fmtTime(S.buffs.crusOH - S.t)}`]);
+  return buffs;
+}
+function sourceInfo(name) {
+  const ability = ABILITIES.find(x => x.name === name);
+  if (ability) return { label: name, icon: ability.icon };
+  return {
+    'Melee': { label: 'Melee', icon: mhItem().icon },
+    'Melee (Off Hand)': { label: 'Melee (Off Hand)', icon: ohItem().icon },
+    'Windfury Attack': { label: 'Windfury Attack', icon: 'spell_nature_windfury' },
+    'Iceblade Hacker': { label: 'Iceblade Hacker', icon: 'inv_axe_03' },
+    'Lacerating Strikes': { label: 'Lacerating Strikes', icon: 'ability_gouge' },
+    'Dragonbreath Chili': { label: 'Dragonbreath Chili', icon: 'inv_drink_17' },
+  }[name] || { label: name, icon: 'inv_misc_questionmark' };
+}
+// Mongoose Bite lights up while Expose Prey is active
+const abilityLit = a => a.proc && a.usable();
+function renderResources() {
+  $('ragefill').style.width = S.mana / CFG.maxMana * 100 + '%';
+  $('ragetext').textContent = `${Math.floor(S.mana).toLocaleString()} / ${CFG.maxMana.toLocaleString()}`;
+}
+
+// ---------------------------------------------------------------------------
+// UI
+// ---------------------------------------------------------------------------
+let last = performance.now();
+const arenaEl = $('arena'), targetEl = $('target'), logEl = $('log');
+
+function floater(text, cls) {
+  if (!arenaEl.offsetParent) return;   // combat tab hidden
+  const el = document.createElement('div');
+  el.className = 'floater ' + cls;
+  el.textContent = text;
+  el.style.left = rand(25, 75) + '%';
+  el.style.top = rand(35, 55) + '%';
+  el.addEventListener('animationend', () => el.remove());
+  arenaEl.appendChild(el);
+}
+
+function log(html) {
+  const el = document.createElement('div');
+  el.innerHTML = html;
+  logEl.appendChild(el);
+  while (logEl.children.length > 8) logEl.firstChild.remove();
+}
+
+function fmtTime(s) {
+  if (s >= 60) return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  return s >= 10 ? Math.ceil(s) : s.toFixed(1);
+}
+
+// --- Ability bar and keybinds (per spec, saved in this browser) ---
+let rebinding = false, rebindTarget = null;
+const RESERVED_KEYS = ['Ctrl+w', 'Ctrl+t', 'Ctrl+n', 'Ctrl+Shift+w', 'Ctrl+Shift+t', 'Ctrl+Shift+n'];
+const RESERVED_NOTE = 'Ctrl+W, Ctrl+T and Ctrl+N belong to the browser and cannot be used.';
+const DEFAULT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
+const keyStore = () => 'hunterSimKeybinds_' + SPEC_ID;
+const CODE_KEYS = {
+  Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backquote: '`', Semicolon: ';', Quote: "'",
+  Comma: ',', Period: '.', Slash: '/', Backslash: '\\', Space: ' ',
+};
+function baseKey(e) {
+  const c = e.code || '';
+  if (/^Digit\d$/.test(c)) return c.slice(5);
+  if (/^Key[A-Z]$/.test(c)) return c.slice(3).toLowerCase();
+  if (/^Numpad\d$/.test(c)) return 'Num' + c.slice(6);
+  if (CODE_KEYS[c]) return CODE_KEYS[c];
+  return e.key.length === 1 ? e.key.toLowerCase() : e.key;
+}
+const normKey = e => (e.ctrlKey ? 'Ctrl+' : '') + (e.shiftKey ? 'Shift+' : '') + baseKey(e);
+function keyLabel(k) {
+  if (!k) return '';
+  const parts = k.split(/\+(?=.)/);
+  const base = parts.pop();
+  const mods = parts.map(m => m[0]).join('');
+  const name = base === ' ' ? 'Spc' : base.length === 1 ? base.toUpperCase() : base.replace('Arrow', '').slice(0, 4);
+  return (mods ? mods + '-' : '') + name;
+}
+function showKeys() { for (const a of barAbilities()) a.keyEl.textContent = keyLabel(a.key); }
+function saveKeys() { store.set(keyStore(), Object.fromEntries(barAbilities().map(a => [a.id, a.key]))); }
+function selectRebind(a) {
+  rebindTarget = a;
+  for (const b of barAbilities()) b.el.classList.toggle('rebind-target', b === a);
+  $('rebind-hint').classList.remove('warn');
+  $('rebind-hint').textContent = a ? `Press a key for ${a.name}, with Shift or Ctrl if you like (Esc to cancel). ${RESERVED_NOTE}`
+    : `Click an ability, then press the key you want. ${RESERVED_NOTE}`;
+}
+function setRebinding(on) {
+  rebinding = on;
+  $('bar').classList.toggle('editing', on);
+  $('keybar').classList.toggle('editing', on);
+  $('rebind').classList.toggle('active', on);
+  $('rebind').textContent = on ? 'Done' : 'Change keybinds';
+  selectRebind(null);
+  if (!on) $('rebind-hint').textContent = '';
+}
+
+function buildBar() {
+  const bar = $('bar');
+  bar.innerHTML = '';
+  const list = barAbilities();
+  bar.style.gridTemplateColumns = `repeat(${list.length}, 1fr)`;
+  const saved = store.get(keyStore(), {});
+  list.forEach((a, i) => {
+    a.defaultKey = DEFAULT_KEYS[i] || '';
+    a.key = typeof saved[a.id] === 'string' ? saved[a.id] : a.defaultKey;
+    const el = document.createElement('button');
+    el.className = 'ability';
+    const cd = cdOf(a);
+    el.title = `${a.name}\n${costLabel(a)}${cd ? ' · ' + (cd >= 60 ? cd / 60 + ' min' : cd + ' sec') + ' cooldown' : ''}\n${a.desc}`;
+    el.style.backgroundImage = `url(${iconUrl(a.icon)})`;
+    el.innerHTML = `<span class="key"></span>` + (costBadge(a) !== '' ? `<span class="cost">${costBadge(a)}</span>` : '') +
+      `<div class="cdmask"></div><div class="cdtext"></div>`;
+    el.addEventListener('click', () => { if (rebinding) selectRebind(a); else press(a); });
+    a.el = el; a.mask = el.querySelector('.cdmask'); a.cdText = el.querySelector('.cdtext'); a.keyEl = el.querySelector('.key');
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+    slot.append(el, a.name);
+    bar.appendChild(slot);
+  });
+  showKeys();
+}
+
+$('rebind').addEventListener('click', () => setRebinding(!rebinding));
+$('rebind-reset').addEventListener('click', () => {
+  for (const a of barAbilities()) a.key = a.defaultKey;
+  saveKeys(); showKeys(); selectRebind(null);
+});
+document.addEventListener('keydown', e => {
+  if (e.repeat || e.altKey || e.metaKey || e.target.tagName === 'INPUT') return;
+  if (['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'CapsLock'].includes(e.key)) return;
+  const key = normKey(e);
+  if (rebinding) {
+    e.preventDefault();
+    if (e.key === 'Escape') return rebindTarget ? selectRebind(null) : setRebinding(false);
+    if (!rebindTarget) return;
+    if (RESERVED_KEYS.includes(key)) {
+      $('rebind-hint').classList.add('warn');
+      $('rebind-hint').textContent = `${key.replace(/[a-z]$/, c => c.toUpperCase())} is a browser shortcut and cannot be bound. Pick another key for ${rebindTarget.name}.`;
+      return;
+    }
+    for (const a of barAbilities()) if (a.key === key) a.key = '';
+    rebindTarget.key = key;
+    saveKeys(); showKeys(); selectRebind(null);
+    return;
+  }
+  const a = barAbilities().find(a => a.key && a.key === key);
+  if (a) { e.preventDefault(); press(a); }
+});
+
+// --- Fight overview (Warcraft Logs style) and reset ---
+function endFight() {
+  S.over = true;
+  S.hp = 0;
+  const n = v => Math.round(v).toLocaleString();
+  const pct = (x, of) => of ? (x / of * 100).toFixed(1) + '%' : '-';
+  const sources = Object.entries(S.stats).sort((x, y) => y[1].dmg - x[1].dmg);
+  const top = sources.length ? sources[0][1].dmg : 1;
+  let casts = 0, hits = 0, crits = 0, avoid = 0;
+  const rows = sources.map(([name, st]) => {
+    const info = sourceInfo(name);
+    const stCasts = st.hits + st.avoided;
+    casts += stCasts; avoid += st.avoided; hits += st.hits; crits += st.crits;
+    return `<tr><td class="wcl-name"><img src="${iconUrl(info.icon)}" alt="">${info.label}</td>` +
+      `<td class="wcl-amount"><span class="wcl-pct">${pct(st.dmg, S.totalDamage)}</span>` +
+      `<span class="wcl-bar"><i style="width:${st.dmg / top * 100}%"></i></span><span class="wcl-total">${n(st.dmg)}</span></td>` +
+      `<td class="num">${stCasts}</td><td class="num">${stCasts ? n(st.dmg / stCasts) : '-'}</td>` +
+      `<td class="num">${st.hits}</td><td class="num">${st.hits ? n(st.dmg / st.hits) : '-'}</td>` +
+      `<td class="num">${pct(st.crits, st.hits)}</td><td class="num">${pct(st.avoided, stCasts)}</td>` +
+      `<td class="num">${(st.dmg / S.t).toFixed(1)}</td></tr>`;
+  }).join('');
+  $('summary-body').innerHTML =
+    `<div class="wcl-meta">Fight length <b>${fmtTime(S.t)}</b> · Mana spent <b>${n(S.manaSpent)}</b> · Mana gained <b>${n(S.manaGained)}</b> · ` +
+    `Mana left <b>${n(S.mana)}</b></div>` +
+    `<table class="wcl"><tr><th>Name</th><th>Amount</th><th class="num">Casts</th><th class="num">Avg Cast</th>` +
+    `<th class="num">Hits</th><th class="num">Avg Hit</th><th class="num">Crit %</th><th class="num">Miss %</th><th class="num">DPS</th></tr>` +
+    rows +
+    `<tr class="wcl-totalrow"><td>Total</td><td class="wcl-amount"><span class="wcl-pct">100%</span><span class="wcl-bar"></span>` +
+    `<span class="wcl-total">${n(S.totalDamage)}</span></td><td class="num">${casts}</td><td class="num">-</td>` +
+    `<td class="num">${hits}</td><td class="num">-</td><td class="num">${pct(crits, hits)}</td><td class="num">${pct(avoid, casts)}</td>` +
+    `<td class="num">${(S.totalDamage / S.t).toFixed(1)}</td></tr></table>`;
+  $('summary').classList.add('show');
+}
+
+function reset() {
+  Object.assign(S, newState());
+  $('hpinput').value = CFG.targetHp;
+  logEl.innerHTML = '';
+  arenaEl.querySelectorAll('.floater').forEach(el => el.remove());
+  $('summary').classList.remove('show');
+  last = performance.now();
+}
+$('hpinput').value = CFG.targetHp;
+$('hpinput').addEventListener('input', e => {
+  const v = Math.round(Number(e.target.value));
+  if (!Number.isFinite(v) || v < 1000 || S.started) return;
+  CFG.targetHp = Math.min(v, 100000000);
+  S.hp = CFG.targetHp;
+});
+$('hpinput').addEventListener('change', e => { e.target.value = CFG.targetHp; });
+$('start').addEventListener('click', () => { S.started = true; last = performance.now(); });
+document.querySelectorAll('.reset').forEach(btn => btn.addEventListener('click', reset));
+
+// --- Tabs ---
+for (const btn of document.querySelectorAll('nav button')) {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + btn.dataset.tab));
+  });
+}
+
+// --- Gear tab ---
+function renderGearTab() {
+  const pctOf = (rating, per) => `+${(rating / per).toFixed(1)}%`;
+  const statText = g => [
+    g.weapon && `${g.weapon.min}-${g.weapon.max} damage, ${g.weapon.speed.toFixed(2)} speed`,
+    g.str && `+${g.str} Str`, g.agi && `+${g.agi} Agi`, g.int && `+${g.int} Int`, g.ap && `+${g.ap} AP`, g.sp && `+${g.sp} spell damage`,
+    g.critRating && `${pctOf(g.critRating, CRIT_RATING_PER_PCT)} crit`, g.hitRating && `${pctOf(g.hitRating, HIT_RATING_PER_PCT)} hit`,
+    g.note,
+  ].filter(Boolean).join(', ');
+  const stat = (label, value) => `<div class="stat"><b>${value}</b>${label}</div>`;
+  const row = g => g.name
+    ? `<tr><td class="dim">${g.slot}</td><td style="width:36px"><img class="talent-icon" src="${iconUrl(g.icon)}" alt=""></td>` +
+      `<td><span class="q-${g.q}">${g.name}</span>${g.enchant ? `<div class="ench">${g.enchant}</div>` : ''}</td><td>${statText(g)}</td></tr>`
+    : `<tr><td class="dim">${g.slot}</td><td></td><td class="dim">Empty</td><td></td></tr>`;
+  $('tab-gear').innerHTML =
+    (custom().on ? `<h2>Custom stats are active (Stats tab): the gear below is not used for stats.</h2>` : '') +
+    `<div class="statgrid">` +
+      stat('Attack power (buffed)', CFG.ap) + stat('Crit chance', CFG.crit.toFixed(2) + '%') +
+      stat('Hit chance', '+' + CFG.hit + '%') + stat('Spell crit chance', CFG.spellCrit.toFixed(2) + '%') + stat('Maximum mana', CFG.maxMana) +
+      stat('Strength', STATS.str) + stat('Agility', STATS.agi) + stat('Intellect', STATS.int) + stat('Spirit', STATS.spi) +
+    `</div>` +
+    `<table><tr><th>Slot</th><th></th><th>Item</th><th>Stats used by the sim</th></tr>${SPEC.gear.map(row).join('')}</table>` +
+    `<footer>Gear and enchants from the MythicSim WoW Forever ${SPEC.title} tier-list preset (pre-raid, both trinket slots empty). ` +
+    `${BASE.race} hunter fighting in melee with no pet. Attack power = 1 per Strength + 1 per Agility + 1 per Intellect (Careful Aim) + gear + 110 from Aspect of the Beast + buffs. Agility includes Lightning Reflexes; crit includes Lethal Attacks and the Orc axe bonus; hit includes Surefooted. ` +
+    `Boss armor after debuffs: ${CFG.targetArmor} (${((1 - CFG.armorMult) * 100).toFixed(1)}% physical damage reduction). ` +
+    `Crusader on both weapons: about 1 proc per minute each, +100 Strength for 15 sec. Mana: Spirit regeneration pauses for 5 sec after spending mana unless Resourcefulness is up. Weapon damage and enchant values are Classic figures.</footer>`;
+}
+
+// --- Talents tab ---
+function renderTalentsTab() {
+  const treePoints = tree => tree.talents.reduce((n, t) => n + T(t[0]), 0);
+  const treeHtml = tree => {
+    let cells = '';
+    for (const [name, max, row, col, icon, desc, isNew, req] of tree.talents) {
+      const pts = T(name);
+      const state = pts === 0 ? 'empty' : pts === max ? 'full' : 'partial';
+      if (req) {
+        const from = tree.talents.find(t => t[0] === req);
+        cells += `<div class="tlink ${pts ? 'on' : ''}" style="grid-column:${col};grid-row:${from[2]} / ${row + 1}"></div>`;
+      }
+      const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+      cells += `<div class="tnode ${state}" style="grid-column:${col};grid-row:${row};background-image:url(${iconUrl(icon)})" ` +
+        `data-name="${esc(name)}" data-pts="${pts}" data-max="${max}" data-desc="${esc(desc)}" data-sim="${SIM_TALENTS.has(name) ? 1 : ''}" data-isnew="${isNew ? 1 : ''}">` +
+        (isNew ? '<i>new</i>' : '') + `<span>${pts}/${max}</span></div>`;
+    }
+    return `<div class="tree"><h2>${tree.name} <span class="dim">(${treePoints(tree)})</span></h2><div class="tgrid">${cells}</div></div>`;
+  };
+  $('tab-talents').innerHTML =
+    `<div class="trees">${TREES.map(treeHtml).join('')}</div>` +
+    `<footer>${TREES.map(treePoints).join(' / ')} (51 points). ${SPEC.name} build from the MythicSim preset; talents are fixed. ` +
+    `Hover a talent to see what it does and whether this simulation models it.</footer>`;
+}
+
+// --- Talent tooltips: hover a talent in the tree ---
+{
+  const tip = document.createElement('div');
+  tip.id = 'talent-tip';
+  document.body.appendChild(tip);
+  let current = null;
+  document.addEventListener('mousemove', e => {
+    const node = e.target.closest ? e.target.closest('.tnode') : null;
+    if (!node) { tip.style.display = 'none'; current = null; return; }
+    if (node !== current) {
+      current = node;
+      const d = node.dataset;
+      const taken = Number(d.pts) > 0;
+      tip.innerHTML = `<div class="tip-head"><b></b><span>Rank ${d.pts}/${d.max}</span></div>` +
+        (d.isnew ? '<div class="tip-new">New in Forever</div>' : '') + '<div class="tip-desc"></div>' +
+        `<div class="tip-status ${taken && d.sim ? 'sim' : ''}">${!taken ? 'Not taken' : d.sim ? 'Simulated' : 'No effect in this simulation'}</div>`;
+      tip.querySelector('b').textContent = d.name;
+      tip.querySelector('.tip-desc').textContent = d.desc;
+      tip.style.display = 'block';
+    }
+    // Keep the tooltip beside the cursor and inside the window
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX + 16, y = e.clientY + 16;
+    if (x + w > window.innerWidth - 8) x = e.clientX - w - 12;
+    if (y + h > window.innerHeight - 8) y = e.clientY - h - 12;
+    tip.style.left = Math.max(8, x) + 'px';
+    tip.style.top = Math.max(8, y) + 'px';
+  });
+}
+
+// --- Stats tab: custom character stats, independent of the gear list ---
+const STAT_FIELDS = [
+  ['str', 'Strength', 1, 0, 2000], ['agi', 'Agility', 1, 0, 2000], ['int', 'Intellect', 1, 0, 2000], ['spi', 'Spirit', 1, 0, 2000],
+  ['ap', 'Attack power', 1, 0, 10000], ['crit', 'Crit chance %', 0.01, 0, 100], ['hit', 'Hit chance %', 0.1, 0, 50], ['sp', 'Spell damage', 1, 0, 2000],
+  ['mhMin', 'Main hand min damage', 1, 1, 2000], ['mhMax', 'Main hand max damage', 1, 1, 2000], ['mhSpeed', 'Main hand speed', 0.1, 1, 4],
+  ['ohMin', 'Off hand min damage', 1, 1, 2000], ['ohMax', 'Off hand max damage', 1, 1, 2000], ['ohSpeed', 'Off hand speed', 0.1, 1, 4],
+];
+function renderResultStats() {
+  const stat = (label, value) => `<div class="stat"><b>${value}</b>${label}</div>`;
+  $('stats-result').innerHTML =
+    stat('Attack power (buffed)', CFG.ap) + stat('Crit chance (buffed)', CFG.crit.toFixed(2) + '%') +
+    stat('Hit chance', '+' + CFG.hit + '%') + stat('Spell crit chance', CFG.spellCrit.toFixed(2) + '%') + stat('Maximum mana', CFG.maxMana) +
+    stat('Strength (buffed)', STATS.str) + stat('Agility (buffed)', STATS.agi) + stat('Intellect (buffed)', STATS.int) + stat('Spirit (buffed)', STATS.spi);
+}
+function fillStatsTab() {
+  $('custom-on').checked = custom().on;
+  $('custom-fields').classList.toggle('off', !custom().on);
+  $('tab-stats').querySelectorAll('input[data-k]').forEach(el => { el.value = custom()[el.dataset.k]; });
+}
+function setupChanged() {
+  applySetup();
+  if (!S.started) S.mana = CFG.maxMana;
+  S.mana = Math.min(S.mana, CFG.maxMana);
+  renderGearTab(); renderResultStats();
+}
+{
+  $('tab-stats').innerHTML =
+    `<label class="custom-toggle"><input type="checkbox" id="custom-on"> Use custom stats instead of the gear list</label>` +
+    `<div class="fields" id="custom-fields">` +
+    STAT_FIELDS.map(([k, label, step, min, max]) =>
+      `<label>${label}<input type="number" data-k="${k}" step="${step}" min="${min}" max="${max}"></label>`).join('') +
+    `</div>` +
+    `<button class="plain-btn" id="custom-copy">Copy current gear into the fields</button>` +
+    `<h2>Resulting stats in the sim</h2><div class="statgrid" id="stats-result"></div>` +
+    `<footer>Enter your unbuffed character-sheet values, talents included. Raid buffs and consumables from the left panel are added on top; ` +
+    `Strength, Agility, Intellect and Spirit are used to work out what those buffs add. The Crusader enchants and talents stay as they are. ` +
+    `Custom stats are kept separately for each spec, apply immediately, and are saved in this browser.</footer>`;
+  const save = () => { store.set('hunterSimCustomStats_' + SPEC_ID, custom()); setupChanged(); };
+  $('custom-on').addEventListener('change', e => { custom().on = e.target.checked; $('custom-fields').classList.toggle('off', !custom().on); save(); });
+  $('custom-fields').addEventListener('input', e => {
+    const f = STAT_FIELDS.find(f => f[0] === e.target.dataset.k);
+    const v = Number(e.target.value);
+    if (!f || e.target.value === '' || !Number.isFinite(v)) return;
+    custom()[f[0]] = Math.min(f[4], Math.max(f[3], v));
+    save();
+  });
+  $('custom-fields').addEventListener('change', fillStatsTab);
+  $('custom-copy').addEventListener('click', () => { Object.assign(custom(), gearSheet()); fillStatsTab(); save(); });
+}
+
+// --- Setup panel: raid buffs, consumables, boss debuffs ---
+{
+  const panel = $('buffpanel');
+  const draw = () => {
+    panel.innerHTML = TOGGLE_GROUPS.map((g, i) =>
+      `<section><h2>${g.title}</h2>` +
+      `<div class="buffbtns"><button data-group="${i}" data-on="1">All</button><button data-group="${i}" data-on="">None</button></div>` +
+      g.items.map(b =>
+        `<label class="rbuff ${b.on ? 'on' : ''}" title="${b.desc}"><input type="checkbox" data-id="${b.id}" ${b.on ? 'checked' : ''}>` +
+        `<img src="${iconUrl(b.icon)}" alt=""><span><b>${b.name}</b><small>${b.desc}</small></span></label>`).join('') +
+      `</section>`).join('');
+  };
+  const changed = () => { draw(); setupChanged(); };
+  panel.addEventListener('change', e => {
+    ALL_TOGGLES.find(b => b.id === e.target.dataset.id).on = e.target.checked;
+    changed();
+  });
+  panel.addEventListener('click', e => {
+    if (!e.target.dataset.group) return;
+    TOGGLE_GROUPS[e.target.dataset.group].items.forEach(b => b.on = !!e.target.dataset.on);
+    changed();
+  });
+  draw();
+}
+
+// --- Spec switch ---
+function setSpec(id) {
+  SPEC_ID = id; SPEC = SPECS[id];
+  store.set('hunterSimSpec', id);
+  if (rebinding) setRebinding(false);
+  applySetup();
+  reset();
+  document.querySelectorAll('#specbar button').forEach(b => b.classList.toggle('active', b.dataset.spec === id));
+  $('spec-title').textContent = SPEC.title;
+  document.title = `WoW Forever ${SPEC.title} Simulator`;
+  buildBar(); renderGearTab(); renderTalentsTab(); fillStatsTab(); renderResultStats();
+  $('footer').textContent = `${SPEC.blurb} Press Start fight, then use the keys shown on the buttons, or click, to use abilities. ` +
+    `See the Gear, Talents and Stats tabs for the setup.`;
+}
+document.querySelectorAll('#specbar button').forEach(b => b.addEventListener('click', () => { if (b.dataset.spec !== SPEC_ID) setSpec(b.dataset.spec); }));
+
+// --- Frame rendering ---
+function render() {
+  arenaEl.classList.toggle('idle', !S.started);
+  const hpPct = S.hp / CFG.targetHp * 100;
+  $('hpfill').style.width = hpPct + '%';
+  $('hpbar').classList.toggle('execute', S.hp <= CFG.targetHp * CFG.executeRange);
+  $('hptext').textContent = `${Math.ceil(S.hp).toLocaleString()} / ${CFG.targetHp.toLocaleString()} (${Math.ceil(hpPct)}%)`;
+  renderResources();
+  $('mhbar').style.width = S.mhProg * 100 + '%';
+  $('ohbar').style.width = S.ohProg * 100 + '%';
+
+  for (const a of barAbilities()) {
+    const cd = cdOf(a);
+    const cdLeft = (S.ready[a.id] || 0) - S.t;
+    const gcdLeft = a.gcd ? S.gcdUntil - S.t : 0;
+    let frac = 0;
+    if (cdLeft > 0 && cdLeft >= gcdLeft && cd) frac = cdLeft / cd;
+    else if (gcdLeft > 0) frac = gcdLeft / (a.gcdTime || CFG.gcd);
+    a.mask.style.height = Math.min(1, frac) * 100 + '%';
+    a.cdText.textContent = cdLeft > 0 && cd ? fmtTime(cdLeft) : '';
+    a.el.classList.toggle('norage', !S.started || !canAfford(a) || !!(a.usable && !a.usable()));
+    a.el.classList.toggle('queued', S.started && S.queued === a.id);
+    a.el.classList.toggle('proc', S.started && !!abilityLit(a));
+  }
+
+  const buffs = classBuffs();
+  const html = buffs.map(([icon, text]) => `<div class="buff"><img src="${iconUrl(icon)}" alt="">${text}</div>`).join('');
+  if ($('buffs').innerHTML !== html) $('buffs').innerHTML = html;
+
+  $('meter').innerHTML = `DPS <b>${S.t > 0 ? (S.totalDamage / S.t).toFixed(1) : '0.0'}</b> · ` +
+    `Damage <b>${S.totalDamage.toLocaleString()}</b> · Time <b>${fmtTime(S.t)}</b>`;
+}
+
+function frame(now) {
+  // Cap the step so a backgrounded tab pauses rather than fast-forwarding
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  if (S.started && !S.over) tick(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+
+setSpec(SPEC_ID);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
